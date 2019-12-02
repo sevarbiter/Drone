@@ -1,53 +1,4 @@
-// #include <avr/io.h>
-// #include "timer2.h"
-// 
-// int main(void)
-// {
-// 	DDRB |= (1 << DDB1) |(1 << DDB2);
-// 	// PB1 and PB2 is now an output
-// 
-// 	ICR1 = 2499;
-// 	// set TOP to 16bit
-// 
-// 	OCR1A = 0;
-// 	// set PWM for 25% duty cycle @ 16bit
-// 
-// 	OCR1B = 65;
-// 	// set PWM for 75% duty cycle @ 16bit
-// 
-// 	TCCR1A |= (1 << COM1A1)|(1 << COM1B1);
-// 	// set none-inverting mode
-// 
-// 	TCCR1A |= (1 << WGM11);
-// 	TCCR1B |= (1 << WGM12)|(1 << WGM13);
-// 	// set Fast PWM mode using ICR1 as TOP
-// 	
-// 	TCCR1B |= (1 << CS10);
-// 	// START the timer with no prescaler
-// 	OCR1B = 65;
-// 	
-// 	
-// 	
-// 
-// 	
-// 		while(!TimerFlag){
-// 			
-// 		}
-// 		TimerFlag = 0;
-// 		//OCR1B = 0x005;
-// 
-// 		
-// 
-// 		
-// 	
-// 
-// 	while (1);
-// 	{
-// 		
-// 			
-// 		}
-// 
-// }
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/delay.h>
@@ -59,9 +10,48 @@
 #include <avr/io.h>		/* Include AVR std. library file */
 #include <stdio.h>		/* Include std. library file */
 #include <util/delay.h>		/* Include Delay header file */
+#include <math.h>
 #include "timer2.h"
 
+#define M1 3
+#define M2 4
+#define M3 5
+#define M4 6
+unsigned char M1_Throtle = 11;
+unsigned char M2_Throtle = 11;
+unsigned char M3_Throtle = 11;
+unsigned char M4_Throtle = 11;
+unsigned char Sensitity = 5;
+int x_angle = 0;
+int y_angle = 0;
+
+volatile short Acc_rawX, Acc_rawY, Acc_rawZ,Gyr_rawX, Gyr_rawY, Gyr_rawZ;
+
+int Acceleration_angle[2];
+int Gyro_angle[2];
+int Total_angle[2];
+int rad_to_deg = 180/3.141592654;
+int elapsedTime, time, timePrev;
+
+float PID, pwmLeft, pwmRight, errors, previous_error;
+float pid_p=0;
+float pid_i=0;
+float pid_d=0;
+/////////////////PID CONSTANTS/////////////////
+double kp=3.55;//3.55
+double ki=0.005;//0.003
+double kd=2.05;//2.05
+///////////////////////////////////////////////
+
+double throttle=1300; //initial value of throttle to the motors
+float desired_angle = 0; //This is the angle in which we whant the
+//balance to stay steady
+
 unsigned char data[10] = {'x',':',' ','+','0','0','0','0','0','\0'};
+
+
+
+	
 
 
 #include <avr/io.h>
@@ -99,8 +89,15 @@ void move_servo(unsigned char  x, unsigned char servo_pin ){
 	_delay_ms(20-x);
 	
 }
-void findnum(unsigned short t){
-	signed short temp = (signed)(t);
+void move_servo_calibrate(unsigned char  x){
+	PORTD = 0xF8;;
+	_delay_ms(x);
+	PORTD = 0x00;
+	_delay_ms(20-x);
+	
+}
+void findnum(int t){
+	 int temp = t;
 	if(temp < 0){
 		data[3] = '-';
 		temp = temp * (-1);
@@ -114,94 +111,249 @@ void findnum(unsigned short t){
 	temp = temp % 1000;
 	data[6] = temp/100 + 48;
 	temp = temp % 100;
-	data[7] - temp/10 + 48;
+	data[7] = temp/10 + 48;
 	temp = temp % 10;
 	data[8] = temp + 48;
+
 }
 
-int main(void)
+
+void CalibrateESC()
 {
-	DDRD = 0xFF;
-	DDRA = 0xFF;
-/*	DDRA = 0x01; PORTA = 0;*/
-// 	DDRD |= (1<<PD5);	/* Make OC1A pin as output */
-// 	TCNT1 = 0;		/* Set timer1 count zero */
-// 	ICR1 = 2499;		/* Set TOP count for timer1 in ICR1 register */
-// 
-// 	/* Set Fast PWM, TOP in ICR1, Clear OC1A on compare match, clk/64 */
-// 	TCCR1A = (1<<WGM11)|(1<<COM1A1);
-// 	TCCR1B = (1<<WGM12)|(1<<WGM13)|(1<<CS10)|(1<<CS11);
-// 	TimerSet(1000);
-// 	TimerOn();
-// 	
-// 	OCR1A = 65;
+	for(unsigned char i = 5; i < 8; i++){
+			PORTC = 0x00;
+			_delay_ms(100);
+			PORTC = 0xFF;
+			while(!TimerFlag){
+				move_servo_calibrate(i);
+			}
+			TimerFlag = 0;
+			
+		}
+}
 
-
+void GyroAcel_init()
+{
+	i2cStart(0x69);
+	i2cSend(0x7E);
+	i2cSend(0x00);
+	_delay_ms(300);
+	i2cStop();
 	
-
+	i2cStart(0x69);
+	i2cSend(0x7E);
+	i2cSend(0x03);
+	_delay_ms(300);
 	
-	TimerSet(5000);
-	TimerOn();
-	unsigned char j = 0;
-	unsigned char i = 1;
-	LCD_init();
-	LCD_DisplayString(1, data);
-	
-	//Initialize gyro
 	i2cStart(0x69);
 	i2cSend(0x7E);
 	i2cSend(0x15);
-	_delay_ms(100);
+	_delay_ms(300);
+	
+	i2cStart(0x69);
+	i2cSend(0x7E);
+	i2cSend(0x12);
+	_delay_ms(300);
 	i2cStop();
+}
+
+//Performs two reads. The lower 7 bits and upper 7 bits. 
+short GyroAcel_read(uint8_t registers)
+{ 
+	
+
+		i2cStart(0x69);
+		i2cSend(registers);
+		i2cStop();
+		_delay_ms(1);
+		i2cStartRead(0x69);
+		char dta1 =  i2cReadAck();
+		char dta2 = i2cReadNoAck();
+		i2cStop();
+		return (short)dta2 << 8 | (short)dta1;
+
+	
+	//findnum(variable);
+}
+
+void SetModulation(short t)
+{
+	OCR1A = ICR1 - t; //18000
+}
+
+void pwm_init(short t)
+{
+DDRD |= 0xFF;
+TCCR1A |= 1<<WGM11 | 1<<COM1A1 | 1<<COM1A0;
+TCCR1B |= 1<<WGM13 | 1<<WGM12 | 1<<CS10;
+ICR1 = 2999;
+
+//RANGE 850 -
+SetModulation(t);
+
+}
+void Update_Angles()
+{
+	Gyr_rawX = GyroAcel_read(0x0C);
+	 			Gyr_rawY =  GyroAcel_read(0x0E);
+	 			Gyr_rawZ = GyroAcel_read(0x10);
+	  			Acc_rawX =  GyroAcel_read(0x12);
+	Acc_rawY = GyroAcel_read(0x14);
+	  			Acc_rawZ = GyroAcel_read(0x16);
+	  
+	//-90 -> 90: on X, away from atmega negative
+	Acceleration_angle[0] = (atan((Acc_rawY/16384.0)/sqrt(pow((Acc_rawX/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg);
+	Acceleration_angle[1] = atan(-1*(Acc_rawX/16384.0)/sqrt(pow((Acc_rawY/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg;
+			    
+}
+
+ int main(void)
+ {
+	DDRD = 0xFF;
+	DDRA = 0x00;
+// 	DDRC = 0xFF;
+// 	
+	TimerSet(5000);
+	TimerOn();
+// 	
+	CalibrateESC(); //TimerSet must be 4500ms and On before calling this function.*/ 
+
+// 
+// 					
+// 
+// 		
+// 
+// 		unsigned char a;
+// 		TimerSet(10);
+// 			short temp = 810;
+// 		pwm_init(temp);
+// 	while(1){
+// 		
+// 		SetModulation(temp);
+// // 		_delay_ms(1);
+// // 		a = ~PINA & 0x01;
+// // 		a = a << 3;
+// // 		PORTD  = a;
+// 		while(!TimerFlag){
+// 			
+// 		}
+// 		TimerFlag = 0;
+// 		temp++;
+// 		if(temp == 950){
+// 			temp = 810;
+// 		}
+// 		
+// 		
+// 	}
+
+		
+
+
+		
+		//PORTD = a << 6;
+
+		
+		
+		
+		
+			
+
+			
+//	}
+	
+	
+
+
+	
+	//DDRD = 0xFF;
+	
+	
+	//Initialize gyro
+	GyroAcel_init();
+
 	
 	
 	
 	//Read gyro:
 	
+	//unsigned char j = 1;
 	
 	
-	
-	
+		x_angle = Acceleration_angle[0] = (atan((Acc_rawY/16384.0)/sqrt(pow((Acc_rawX/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg);
+		y_angle = Acceleration_angle[1] = atan(-1*(Acc_rawX/16384.0)/sqrt(pow((Acc_rawY/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg;
 	
 	while(1)
 	{
+		
+		//PORTD = PORTD | 0x80;
+					_delay_ms(100);
+		
+					move_servo(M1_Throtle,M1);
+ 					move_servo(M4_Throtle,M4);
+ 					move_servo(M3_Throtle,M3);
+  					move_servo(M2_Throtle,M2);
+		
+		
+		//A TILT TOWARDS -Y WHEN X IS AT BALANCE(-10<X<10)
+		if((Acceleration_angle[1] < y_angle - Sensitity) && ((Acceleration_angle[0] > - Sensitity) && (Acceleration_angle[0] < Sensitity) )){
+			//_delay_ms(10);
+			while((Acceleration_angle[1] < y_angle - Sensitity) && ((Acceleration_angle[0] > - Sensitity) && (Acceleration_angle[0] < Sensitity) )){
+					move_servo(M1_Throtle,M1);
+		 			//move_servo(M4_Throtle-1,M4);
+		   			move_servo(M3_Throtle,M3);
+					//move_servo(M2_Throtle-1,M2);
+					Update_Angles();
+			}
+
+		}
+		//A TILT TOWARDS Y WHEN X IS AT BALANCE(-10<X<10)
+		if((Acceleration_angle[1] > y_angle + Sensitity) && ((Acceleration_angle[0] > - Sensitity) && (Acceleration_angle[0] <  Sensitity))){
+			//_delay_ms(20);
+			while((Acceleration_angle[1] > y_angle + Sensitity) && ((Acceleration_angle[0] > - Sensitity) && (Acceleration_angle[0] < Sensitity))){
+				move_servo(M4_Throtle,M4);
+				move_servo(M2_Throtle,M2);
+				Update_Angles();
+			}
+		}
+		if((Acceleration_angle[0] < x_angle - Sensitity) && ((Acceleration_angle[1] > -Sensitity) && (Acceleration_angle[1] < Sensitity) )){
+			while((Acceleration_angle[0] < x_angle - Sensitity) && ((Acceleration_angle[1] > -Sensitity) && (Acceleration_angle[1] < Sensitity) )){
+				move_servo(M1_Throtle,M1);
+
+				move_servo(M2_Throtle,M2);
+				Update_Angles();
+			
+			}
+		}
+		if((Acceleration_angle[0] > x_angle + Sensitity) && ((Acceleration_angle[1] > -Sensitity) && (Acceleration_angle[1] < Sensitity) )){
+			_delay_ms(50);
+			while((Acceleration_angle[0] > x_angle + Sensitity) && ((Acceleration_angle[1] > -Sensitity) && (Acceleration_angle[1] < Sensitity) )){
+				move_servo(M4_Throtle,M4);
+				move_servo(M3_Throtle,M3);
+				Update_Angles();
+			}
+
+		}
+
+// 		if(Acceleration_angle[1] > y_angle +10){
+// 			_delay_ms(100);
+// 			move_servo(M1_Throtle,M1);
+// 			move_servo(M4_Throtle+1,M4);
+// 			
+// 		}
+		//else(y_angle > Acceleration_angle[1])
+		
+	
+
 		//Read Gyro:
-			i2cStart(0x69);
-			i2cSend(0x0C);
-			i2cStop();
-			_delay_ms(100);
-			
-			i2cStartRead(0x69);
-			unsigned char dta1 =  i2cReadAck();
-			unsigned char dta2 = i2cReadNoAck();
-			
-			i2cStop();
-			
-			unsigned short n = (short)dta2 << 8 | (short)dta1;
-			findnum(n);
-			LCD_DisplayString(1,data);
-			_delay_ms(1000);
-			
-			
+		// ReadValues
+			Update_Angles();
 
-// 
-// 
-// 		PORTA = (PORTA == 0x00)? 0x01: 0x00;
-// 		while(!TimerFlag){
-// 					move_servo(j,3);
-// 					move_servo(j,4);
-// 					move_servo(j,5);
-// 					move_servo(j,6);
-// 					
-// 		}
-// 		TimerFlag = 0;
-// 		j +=1;
-// 		if(j == 15){
-// 			j = 0;
-// 		}
 
+
+		
 
 
 	}
 }
+
 
