@@ -261,6 +261,7 @@ void Update_Angles()
 	//-90 -> 90: on X, away from atmega negative
 	Acceleration_angle[0] = (atan((Acc_rawY/16384.0)/sqrt(pow((Acc_rawX/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg);
 	Acceleration_angle[1] = atan(-1*(Acc_rawX/16384.0)/sqrt(pow((Acc_rawY/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg;
+	findnum(Acceleration_angle[0]);
 			    
 }
 
@@ -388,7 +389,7 @@ void TiltTowardsPositiveX()
 		}
 		if (M1_Throtle < Max_trotle)
 		{
-			M1_Throtle += adjustment_speed1;
+			M1_Throtle += adjustment_speed1; 
 		}
 	}
 }
@@ -397,26 +398,39 @@ void TiltTowardsPositiveX()
  {
 	DDRD = 0xFF; 
 	DDRC = 0xFF ;PORTC = 0xFF; 
-	DDRA = 0xF0; PORTA = 0x0F;;
+	DDRA = 0xFF; PORTA = 0x00;;
 	DDRB = 0x00; PORTB = 0xFF;
 
 	TimerSet(4900);
 	TimerOn();
+	
+// 	LCD_init();
+// 	LCD_DisplayString(1,"HELLO");
+// 	GyroAcel_init();
+// 	while(1){
+// 		Update_Angles();
+// 		while(!TimerFlag){
+// 			
+// 		}
+// 		TimerFlag = 0;
+// 		findnum(Acceleration_angle[0]);
+// 		LCD_DisplayString(1,data);
+// 		
+// 	}
 	CalibrateESC();
-
-		
+	
 	
 	//Initialize gyro
 	GyroAcel_init();
 	TimerSet(25);
 	Update_Angles();
+
+	
+	y_angle = -1;
+	x_angle = 0;
 	
 	
-	y_angle = 9;
-	x_angle = 5;
-	
-	
-	
+	unsigned char bInput = 0;
 	
 		x_angle = Acceleration_angle[0] = (atan((Acc_rawY/16384.0)/sqrt(pow((Acc_rawX/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg);
 		y_angle = Acceleration_angle[1] = atan(-1*(Acc_rawX/16384.0)/sqrt(pow((Acc_rawY/16384.0),2) + pow((Acc_rawZ/16384.0),2)))*rad_to_deg;
@@ -434,10 +448,10 @@ void TiltTowardsPositiveX()
 		
 		//PORTD = PORTD | 0x80;
 		if(i < 1000){
-			M1_Throtle +=6;
-			M2_Throtle+=6;
-			M3_Throtle+=6;
-			M4_Throtle+=6;
+			M1_Throtle +=3;
+			M2_Throtle +=3;
+			M3_Throtle +=3;
+			M4_Throtle +=3;
 			i++;
 		}
 		else{
@@ -463,6 +477,7 @@ void TiltTowardsPositiveX()
 	
 
 		Update_Angles();
+		bInput = ~PORTB;
 	if(bInput < 15 && bInput > 0) {
 		if(bInput == 0x01) {
 			x_angle+=5;
