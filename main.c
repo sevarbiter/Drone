@@ -75,7 +75,15 @@ void pwm_init(short t)
 	//SetModulation(t);
 
 }
-void move_servo(double  x, unsigned char servo_pin ){
+/*----------------------------------------------------------------------------------------------
+*move_motor(double  x, unsigned char servo_pin )
+*Input: value for which pulse with modulation will modulate and the pinout desired for the modulation
+*Output: none
+*Description: This function will take a certain value between 8000 - 15000.
+*			  This value is then used to create a pulse with modulation
+*			  which is required for creating a PWM Signal.
+------------------------------------------------------------------------------------------------*/
+void move_motor(double  x, unsigned char servo_pin ){
 	unsigned char s_value;
 	switch(servo_pin){
 		case 0:
@@ -109,7 +117,15 @@ void move_servo(double  x, unsigned char servo_pin ){
 	_delay_us(20000-x);
 	
 }
-void move_servo_calibrate(double x){
+/*----------------------------------------------------------------------------------------------
+*move_motor_calibrate(double x)
+*Input: value for which pulse with modulation will modulate at
+*Output: none
+*Description: This function will take a certain value between 0 - 20. 
+*			  This value is then used to create a pulse with modulation 
+*			  which is required for creating a PWM Signal.
+------------------------------------------------------------------------------------------------*/
+void move_motor_calibrate(double x){
 
 		
 		PORTD = 0xFF;
@@ -118,6 +134,13 @@ void move_servo_calibrate(double x){
 		_delay_ms(20-x);
 		
 }
+/*----------------------------------------------------------------------------------------------
+*findnum(int t)
+*Input: int t
+*Output: none
+*Description: This function takes an integer and updates an array for outputing to LCD. used
+			  for testing gyro.
+------------------------------------------------------------------------------------------------*/
 void findnum(int t){
 	 int temp = t;
 	if(temp < 0){
@@ -139,13 +162,19 @@ void findnum(int t){
 
 }
 
-
+/*----------------------------------------------------------------------------------------------
+*CalibrateESC()
+*Input: none
+*Output: none
+*Description: This function sends a set of values to move_motor_calibrate(), which in turn
+*			  proceeds to calibrate the ESC with the proper PWM values.
+------------------------------------------------------------------------------------------------*/
 void CalibrateESC()
 { 
 	
 	for(int i = 5; i < 8; i++ ){
 			while(!TimerFlag){
-				move_servo_calibrate(i);
+				move_motor_calibrate(i);
 			}
 			TimerFlag = 0;
 			
@@ -154,7 +183,13 @@ void CalibrateESC()
 		}
 
 }
-
+/*----------------------------------------------------------------------------------------------
+*GyroAcel_init()
+*Input: none
+*Output: none
+*Description: This function initializes the gyro/accelerometer module used to control the flight
+*			  of the drone, it turns on the gyro and accelerometer. 
+------------------------------------------------------------------------------------------------*/
 void GyroAcel_init()
 {
 	i2cStart(0x69);
@@ -179,7 +214,14 @@ void GyroAcel_init()
 	_delay_ms(300);
 	i2cStop();
 }
-
+/*----------------------------------------------------------------------------------------------
+*move_motor_calibrate(double x)
+*Input: value for which pulse with modulation will modulate at
+*Output: none
+*Description: This function will take a certain value between 0 - 20.
+*			  This value is then used to create a pulse with modulation
+*			  which is required for creating a PWM Signal.
+------------------------------------------------------------------------------------------------*/
 //Performs two reads. The lower 7 bits and upper 7 bits. 
 short GyroAcel_read(uint8_t registers)
 { 
@@ -199,7 +241,14 @@ short GyroAcel_read(uint8_t registers)
 	//findnum(variable);
 }
 
-
+/*----------------------------------------------------------------------------------------------
+*Update_Angles()
+*Input: none
+*Output: none
+*Description: This function updates the values held in Acceleration_angle[] matrix for both 
+			  the x-axis and the y-axis. It performs this update by calling on the gyro/accelerometer
+			  module and taking a reading. 
+------------------------------------------------------------------------------------------------*/
 void Update_Angles()
 {
 	Gyr_rawX = GyroAcel_read(0x0C);
@@ -215,6 +264,15 @@ void Update_Angles()
 			    
 }
 
+/*----------------------------------------------------------------------------------------------
+*TiltTowardsNegativeY()
+*Input: none
+*Output: none
+*Description: This function compares the desired degree variable y_angle with the degree value 
+			  held in the Acceleration_angle[] array and if it is found that the drone is leaning
+			  towards the -Y axis then a correction on alternating motors' speed is performed till 
+			  desired value is reached. 
+------------------------------------------------------------------------------------------------*/
 void TiltTowardsNegativeY()
 {
 	if((Acceleration_angle[1] < y_angle - Sensitity)){
@@ -240,7 +298,15 @@ void TiltTowardsNegativeY()
 
 	}
 }
-
+/*----------------------------------------------------------------------------------------------
+*TiltTowardsPositiveY()
+*Input: none
+*Output: none
+*Description: This function compares the desired degree variable y_angle with the degree value 
+			  held in the Acceleration_angle[] array and if it is found that the drone is leaning
+			  towards the Y axis then a correction on alternating motors' speed is performed till 
+			  desired value is reached. 
+------------------------------------------------------------------------------------------------*/
 void TiltTowardsPositiveY()
 {
 	if((Acceleration_angle[1] > y_angle + Sensitity) ){
@@ -264,7 +330,15 @@ void TiltTowardsPositiveY()
 		
 	}
 }
-
+/*----------------------------------------------------------------------------------------------
+*TiltTowardsNegativex()
+*Input: none
+*Output: none
+*Description: This function compares the desired degree variable x_angle with the degree value 
+			  held in the Acceleration_angle[] array and if it is found that the drone is leaning
+			  towards the -x axis then a correction on alternating motors' speed is performed till 
+			  the desired value is reached. 
+------------------------------------------------------------------------------------------------*/
 void TiltTowardsNegativeX()
 {
 	if((Acceleration_angle[0] < x_angle - Sensitity) ){
@@ -287,7 +361,15 @@ void TiltTowardsNegativeX()
 
 	 		}
 }
-
+/*----------------------------------------------------------------------------------------------
+*TiltTowardPositiveX()
+*Input: none
+*Output: none
+*Description: This function compares the desired degree variable x_angle with the degree value 
+			  held in the Acceleration_angle[] array and if it is found that the drone is leaning
+			  towards the X axis then a correction on alternating motors' speed is performed till 
+			  desired value is reached. 
+------------------------------------------------------------------------------------------------*/
 void TiltTowardsPositiveX()
 {
 	if((Acceleration_angle[0] > x_angle + Sensitity) ){
@@ -343,10 +425,10 @@ void TiltTowardsPositiveX()
 	{
 		while(!TimerFlag){
 								
-								move_servo(M1_Throtle,M1);
-								move_servo(M4_Throtle,M4);
-								move_servo(M3_Throtle,M3);
-								move_servo(M2_Throtle,M2);
+								move_motor(M1_Throtle,M1);
+								move_motor(M4_Throtle,M4);
+								move_motor(M3_Throtle,M3);
+								move_motor(M2_Throtle,M2);
 		}
 		TimerFlag = 0;
 		
